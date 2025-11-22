@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Jakarta EE Todo List</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 2rem auto; background-color: #f4f7f6; color: #333; }
+        h2 { text-align: center; color: #2c3e50; margin-bottom: 30px; }
+
+        /* Kotak Input */
+        .input-group { display: flex; gap: 10px; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        input[type="text"] { flex: 1; padding: 12px; border: 2px solid #eee; border-radius: 8px; outline: none; transition: 0.3s; }
+        input[type="text"]:focus { border-color: #007bff; }
+        button.add-btn { padding: 12px 25px; background: #007bff; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        button.add-btn:hover { background: #0056b3; transform: translateY(-1px); }
+
+        /* Daftar Tugas */
+        ul { list-style: none; padding: 0; }
+        li { background: white; margin-bottom: 10px; padding: 15px; border-radius: 8px; display: flex; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.03); transition: 0.2s; }
+        li:hover { box-shadow: 0 4px 8px rgba(0,0,0,0.08); }
+
+        /* EFEK SELESAI (ABU-ABU) - INI YANG ANDA MINTA */
+        li.completed {
+            background-color: #f0f0f0; /* Background jadi agak gelap dikit */
+            opacity: 0.7; /* Jadi agak transparan */
+        }
+        li.completed .task-name {
+            text-decoration: line-through; /* Coret teks */
+            color: #888888; /* Warna teks jadi abu-abu */
+            font-style: italic;
+        }
+
+        /* Checkbox & Text */
+        .task-content { flex: 1; display: flex; align-items: center; gap: 15px; cursor: pointer; }
+        input[type="checkbox"] { width: 20px; height: 20px; cursor: pointer; accent-color: #28a745; }
+        .task-name { font-size: 16px; font-weight: 500; color: #333; }
+
+        /* Tombol Aksi */
+        .actions { display: flex; gap: 8px; }
+        .btn-action { background: none; border: none; cursor: pointer; font-size: 1.2rem; padding: 5px; border-radius: 4px; transition: 0.2s; }
+        .btn-edit:hover { background-color: #fff3cd; }
+        .btn-delete:hover { background-color: #f8d7da; }
+
+    </style>
+</head>
+<body>
+
+<h2>To-Do List Your Day</h2>
+
+<div class="input-group">
+    <input type="text" id="taskInput" placeholder="Apa kegiatan hari ini?">
+    <button class="add-btn" onclick="addTodo()">Tambah</button>
+</div>
+
+<ul id="todoList">
+</ul>
+
+<script>
+    const API_URL = '/api/todos';
+
+    // 1. READ: Ambil Data
+    async function loadTodos() {
+        try {
+            const response = await fetch(API_URL);
+            const data = await response.json();
+            renderList(data);
+        } catch (e) {
+            console.error("Gagal mengambil data:", e);
+        }
+    }
+
+    // Fungsi render ke layar
+    function renderList(data) {
+        const list = document.getElementById('todoList');
+        list.innerHTML = '';
+
+        data.forEach(item => {
+            const li = document.createElement('li');
+            // Tambahkan class 'completed' jika statusnya true
+            if (item.completed) {
+                li.classList.add('completed');
+            }
+
+            // Perbaikan di tombol Edit: Menggunakan attribute data agar lebih aman
+            li.innerHTML = `
+                    <div class="task-content">
+                        <input type="checkbox" ${item.completed ? 'checked' : ''}
+                               onchange="toggleComplete(${item.id}, this.checked, '${item.taskName}')">
+                        <span class="task-name">${item.taskName}</span>
+                    </div>
+                    <div class="actions">
+                        <button class="btn-action btn-edit" onclick="editTask(${item.id}, '${item.taskName}', ${item.completed})" title="Edit">✏️</button>
+                        <button class="btn-action btn-delete" onclick="deleteTask(${item.id})" title="Hapus">🗑️</button>
+                    </div>
+                `;
+            list.appendChild(li);
+        });
+    }
+
+    // 2. CREATE: Tambah Data
+    async function addTodo() {
+        const input = document.getElementById('taskInput');
+        if (!input.value) return;
+
+        await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ taskName: input.value })
+        });
+        input.value = '';
+        loadTodos();
+    }
+
+    // 3. UPDATE: Checklist Selesai
+    async function toggleComplete(id, isChecked, currentName) {
+        await fetch(`${API_URL}/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                taskName: currentName,
+                // PERBAIKAN: Ganti 'isCompleted' menjadi 'completed'
+                completed: isChecked
+            })
+        });
+        loadTodos();
+    }
+
+    // 4. UPDATE: Edit Nama (FUNGSI INI YANG SEBELUMNYA MACET)
+    async function editTask(id, currentName, currentStatus) {
+        console.log("Tombol edit ditekan untuk ID:", id); // Cek di Inspect Element > Console jika masih macet
+
+        const newName = prompt("Ubah nama tugas:", currentName);
+
+        // Jika user menekan OK dan teks tidak kosong
+        if (newName !== null && newName.trim() !== "") {
+            await fetch(`${API_URL}/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    taskName: newName,
+                    isCompleted: currentStatus
+                })
+            });
+            loadTodos();
+        }
+    }
+
+    // 5. DELETE: Hapus Data
+    async function deleteTask(id) {
+        if(confirm("Yakin ingin menghapus tugas ini?")) {
+            await fetch(`${API_URL}/${id}`, {
+                method: 'DELETE'
+            });
+            loadTodos();
+        }
+    }
+
+    loadTodos();
+</script>
+</body>
+</html>
